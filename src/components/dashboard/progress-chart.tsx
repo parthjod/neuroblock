@@ -1,17 +1,17 @@
 "use client";
 
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { Session } from "@/lib/types";
+import { SessionWithRelations } from "@/lib/types";
 import { format } from "date-fns";
 
 type ProgressChartProps = {
-  sessions: Session[];
+  sessions: SessionWithRelations[];
 };
 
 export default function ProgressChart({ sessions }: ProgressChartProps) {
   const chartData = sessions
     .map((session) => ({
-      date: format(new Date(session.date), "MMM d"),
+      date: format(new Date(session.createdAt), "MMM d"),
       RTS: session.recoveryTrendScore,
     }))
     .reverse();

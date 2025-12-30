@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  password    String
+  role        Role
+  patient     Patient?
+  neurologist Neurologist?
+}
+
+model Patient {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String    @unique
+  details     String?
+  visibility  Boolean   @default(true)
+  neurologists PatientNeurologist[]
+  sessions    Session[]
+}
+
+model Neurologist {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String    @unique
+  profileInfo String?
+  patients    PatientNeurologist[]
+}
+
+model PatientNeurologist {
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  patientId     String
+  neurologist   Neurologist @relation(fields: [neurologistId], references: [id])
+  neurologistId String
+
+  @@id([patientId, neurologistId])
+}
+
+model Session {
+  id                  String      @id @default(cuid())
+  patient             Patient     @relation(fields: [patientId], references: [id])
+  patientId           String
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  rts                 RTS[]
+  recoveryTrendScore  Float
+  status              String
+  isFlagged           Boolean     @default(false)
+  blockchain          Blockchain? @relation(fields: [blockchainId], references: [id])
+  blockchainId        String?
+}
+
+model RTS {
+  id        String  @id @default(cuid())
+  session   Session @relation(fields: [sessionId], references: [id])
+  sessionId String
+  joint     String
+  score     Float
+}
+
+model Blockchain {
+  id              String   @id @default(cuid())
+  transactionHash String
+  timestamp       DateTime
+  session         Session?
+}
+
+enum Role {
+  PATIENT
+  NEUROLOGIST
+}

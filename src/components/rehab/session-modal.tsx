@@ -12,20 +12,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { createNewSession } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
-import type { Patient, Session } from "@/lib/types";
-import { Camera, Hand, Loader2 } from "lucide-react";
-import ProgressRing from "./progress-ring";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { SessionWithRelations, Patient } from "@/lib/types";
+import { ProgressRing } from "./progress-ring";
+import { Loader2, Camera } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
+type SessionState = "idle" | "tracking" | "processing" | "complete" | "error";
 
-type SessionModalProps = {
-  patient: Patient;
-  isOpen: boolean;
-  onClose: () => void;
-  onSessionCreated: (patients: Patient[]) => void;
-};
-
-type SessionState = "idle" | "tracking" | "processing" | "complete";
+interface SessionModalProps {
+    patient: Patient;
+    isOpen: boolean;
+    onClose: () => void;
+    onSessionCreated: (session: SessionWithRelations) => void;
+}
 
 export default function SessionModal({
   patient,
@@ -34,130 +33,52 @@ export default function SessionModal({
   onSessionCreated,
 }: SessionModalProps) {
   const [sessionState, setSessionState] = useState<SessionState>("idle");
-  const [newSessionData, setNewSessionData] = useState<Session | null>(null);
+  const [newSessionData, setNewSessionData] = useState<SessionWithRelations | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
-  const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-
-  const exercises = ["Hand Open/Close", "Wrist Flexion", "Finger Pinch"];
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  const [hasCameraPermission, setHasCameraPermission] = useState(false);
 
   useEffect(() => {
-    const getCameraPermission = async () => {
-      if (!isOpen) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        setHasCameraPermission(true);
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasCameraPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings to use this app.',
-        });
-      }
-    };
-
-    getCameraPermission();
-    
-    return () => {
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-        }
+    // Check for camera permission
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(() => setHasCameraPermission(true))
+            .catch(() => setHasCameraPermission(false));
     }
-  }, [isOpen, toast]);
-
-  const handleEndSession = useCallback(() => {
-    setSessionState("processing");
-    startTransition(async () => {
-      const result = await createNewSession(patient.id, patient.sessions);
-      if (result.success && result.data) {
-        setNewSessionData(result.data);
-        setSessionState("complete");
-        onSessionCreated(result.patients);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: result.error,
-        });
-        setSessionState("idle");
-      }
-    });
-  }, [patient.id, patient.sessions, onSessionCreated, toast, startTransition]);
-
-  useEffect(() => {
-    if (sessionState !== 'tracking') {
-      return;
-    }
-    const interval = setInterval(() => {
-      setCurrentExerciseIndex(prev => prev + 1);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [sessionState]);
-
-  useEffect(() => {
-    if (currentExerciseIndex >= exercises.length) {
-      if (sessionState === 'tracking') {
-        handleEndSession();
-      }
-    }
-  }, [currentExerciseIndex, sessionState, exercises.length, handleEndSession]);
-
-  const handleStartSession = () => {
-    if(!hasCameraPermission) {
-        toast({
-            variant: "destructive",
-            title: "Cannot Start Session",
-            description: "Camera access is required to start a session.",
-        });
-        return;
-    }
-    setSessionState("tracking");
-  };
+  }, []);
 
   const handleClose = () => {
-    onClose();
-    // Delay resetting state to allow for exit animation
-    setTimeout(() => {
+    if (sessionState !== 'processing') {
         setSessionState("idle");
-        setNewSessionData(null);
-        setCurrentExerciseIndex(0);
-    }, 300);
+        onClose();
+    }
+  };
+
+  const handleStartSession = () => {
+    if (hasCameraPermission) {
+        setSessionState("tracking");
+        // Simulate some processing
+        setTimeout(() => {
+            startTransition(() => {
+                createNewSession({ patientId: patient.id, reps: 10, duration: 60, rom: 90})
+                .then((session) => {
+                    if(session) {
+                        setNewSessionData(session);
+                        onSessionCreated(session);
+                        setSessionState("complete");
+                    } else {
+                        setSessionState("error");
+                    }
+                })
+                .catch(()=>setSessionState("error"));
+            });
+        }, 3000);
+    }
   };
 
   const renderContent = () => {
     switch (sessionState) {
-      case "tracking":
-      case "processing":
-        return (
-          <div className="flex flex-col items-center justify-center space-y-6 h-80">
-            <div className="relative w-64 h-48 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-            </div>
-            <div className="text-center">
-                <p className="text-muted-foreground">Tracking exercise:</p>
-                <p className="text-lg font-medium flex items-center gap-2">
-                    <Hand className="w-5 h-5 text-primary" />
-                    {exercises[currentExerciseIndex]}
-                </p>
-            </div>
-            {sessionState === "processing" && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Processing and recording on blockchain...
-                </div>
-            )}
-          </div>
-        );
       case "complete":
         return (
           <div className="flex flex-col items-center justify-center space-y-4 h-80">
@@ -168,6 +89,23 @@ export default function SessionModal({
                 This session has been immutably recorded on the blockchain.
             </p>
           </div>
+        );
+      case "tracking":
+      case "processing":
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 h-80">
+                <Loader2 className="w-16 h-16 text-primary animate-spin"/>
+                <h2 className="text-2xl font-bold">Session in progress...</h2>
+                <p className="text-muted-foreground">Please continue the exercises.</p>
+            </div>
+        );
+      case "error":
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 h-80">
+                <h2 className="text-2xl font-bold text-destructive">Something went wrong</h2>
+                <p className="text-muted-foreground">Could not save the session. Please try again.</p>
+                <Button onClick={() => setSessionState("idle")}>Try Again</Button>
+            </div>
         );
       case "idle":
       default:

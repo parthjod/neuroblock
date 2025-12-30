@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useTransition } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import type { Patient } from "@/lib/types";
 import {
   Card,
@@ -16,18 +17,24 @@ import ProgressChart from "./progress-chart";
 import SessionHistory from "./session-history";
 import SessionModal from "../rehab/session-modal";
 
-type PatientOverviewProps = {
-  initialPatients: Patient[];
-};
-
-export default function PatientOverview({
-  initialPatients,
-}: PatientOverviewProps) {
-  const [patients, setPatients] = useState(initialPatients);
-  const [selectedPatientId, setSelectedPatientId] = useState(
-    patients.find((p) => p.hasPermission)?.id || patients[0]?.id
-  );
+export default function PatientOverview() {
+  const { data: session } = useSession();
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined);
   const [isSessionModalOpen, setSessionModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch(`/api/neurologist/${session.user.id}/patients`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data) {
+            setPatients(data);
+            setSelectedPatientId(data.find((p: Patient) => p.hasPermission)?.id || data[0]?.id)
+          }
+        });
+    }
+  }, [session]);
 
   const selectedPatient = useMemo(
     () => patients.find((p) => p.id === selectedPatientId),

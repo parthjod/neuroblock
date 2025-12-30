@@ -57,9 +57,9 @@ const StatusIndicator = ({
   );
 };
 
-const SessionRow = ({ session, patientId }: { session: Patient['sessions'][0], patientId: string }) => {
-  const formattedDate = useFormattedDate(session.date, "MMMM d, yyyy");
-  const formattedTime = useFormattedDate(session.date, "h:mm a");
+const SessionRow = ({ session, patientId }: { session: import('@/lib/types').SessionWithRelations, patientId: string }) => {
+  const formattedDate = useFormattedDate(session.createdAt, "MMMM d, yyyy");
+  const formattedTime = useFormattedDate(session.createdAt, "h:mm a");
 
   return (
     <AccordionItem value={session.id} key={session.id}>
@@ -79,7 +79,7 @@ const SessionRow = ({ session, patientId }: { session: Patient['sessions'][0], p
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <StatusIndicator status={session.status} />
+            <StatusIndicator status={session.status as any} />
             <div className="text-right">
                 <div className="font-semibold">{session.recoveryTrendScore}</div>
                 <div className="text-xs text-muted-foreground">RTS</div>
@@ -92,19 +92,15 @@ const SessionRow = ({ session, patientId }: { session: Patient['sessions'][0], p
             <Table>
                 <TableHeader>
                     <TableRow>
-                    <TableHead>Exercise</TableHead>
-                    <TableHead className="text-right">Range of Motion</TableHead>
-                    <TableHead className="text-right">Stability</TableHead>
-                    <TableHead className="text-right">Accuracy</TableHead>
+                    <TableHead>Joint</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {session.exercises.map((ex, index) => (
+                    {session.rts.map((rts, index) => (
                     <TableRow key={index}>
-                        <TableCell className="font-medium">{ex.name}</TableCell>
-                        <TableCell className="text-right">{ex.rangeOfMotion}%</TableCell>
-                        <TableCell className="text-right">{ex.stability}</TableCell>
-                        <TableCell className="text-right">{ex.accuracy}%</TableCell>
+                        <TableCell className="font-medium">{rts.joint}</TableCell>
+                        <TableCell className="text-right">{rts.score}%</TableCell>
                     </TableRow>
                     ))}
                 </TableBody>
@@ -114,7 +110,7 @@ const SessionRow = ({ session, patientId }: { session: Patient['sessions'][0], p
                     Tx Hash: <span className="font-mono">{session.blockchain?.transactionHash.substring(0, 12)}...</span>
                 </div>
                 <div className="flex gap-2">
-                    <AIAnalysis session={session} />
+                    <AIAnalysis session={session as any} />
                     <FlagButton patientId={patientId} sessionId={session.id} isFlagged={session.isFlagged} />
                 </div>
             </div>

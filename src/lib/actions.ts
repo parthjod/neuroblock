@@ -1,10 +1,9 @@
 "use server";
 
 import { explainHandMovementQuality } from "@/ai/flows/explain-hand-movement-quality";
-import { flagSession as flagSessionInData, addSessionToPatient as addSessionToPatientData, getPatients } from "@/lib/data";
-import { recordFlagOnChain, recordSessionOnChain } from "@/lib/blockchain";
-import type { Patient, Session, Exercise } from "./types";
+import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { recordSessionOnChain, recordFlagOnChain } from "./blockchain";
 
 export async function getAIAnalysis(
   movementDescription: string,
@@ -38,7 +37,10 @@ export async function flagSessionAction(
       isFlagged
     );
     if (blockchainResponse.success) {
-      flagSessionInData(patientId, sessionId, isFlagged);
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { isFlagged },
+      });
       revalidatePath("/");
       return { success: true, message: `Session ${isFlagged ? "flagged" : "unflagged"}.` };
     } else {
@@ -50,21 +52,24 @@ export async function flagSessionAction(
   }
 }
 
-export async function createNewSession(patientId: string, previousSessions: Session[]) {
+export async function createNewSession(patientId: string) {
   try {
-    // Simulate new exercise data
-    const newExercises: Exercise[] = [
-        { name: 'Hand Open/Close', rangeOfMotion: Math.round(Math.random() * 20 + 60), stability: Math.round(Math.random() * 20 + 65), accuracy: Math.round(Math.random() * 20 + 70) },
-        { name: 'Wrist Flexion', rangeOfMotion: Math.round(Math.random() * 20 + 50), stability: Math.round(Math.random() * 20 + 60), accuracy: Math.round(Math.random() * 20 + 65) },
-        { name: 'Finger Pinch', rangeOfMotion: Math.round(Math.random() * 20 + 55), stability: Math.round(Math.random() * 20 + 60), accuracy: Math.round(Math.random() * 20 + 68) },
-    ];
-    
-    // Calculate new RTS
+    const previousSessions = await prisma.session.findMany({
+      where: { patientId },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    });
     const lastRTS = previousSessions[0]?.recoveryTrendScore ?? 60;
-    const currentScore = newExercises.reduce((acc, ex) => acc + ex.accuracy + ex.rangeOfMotion + ex.stability, 0) / (newExercises.length * 3);
+
+    const newExercises = [
+      { joint: "Hand Open/Close", score: Math.round(Math.random() * 20 + 60) },
+      { joint: "Wrist Flexion", score: Math.round(Math.random() * 20 + 50) },
+      { joint: "Finger Pinch", score: Math.round(Math.random() * 20 + 55) },
+    ];
+
+    const currentScore = newExercises.reduce((acc, ex) => acc + ex.score, 0) / newExercises.length;
     const newRTS = Math.round((lastRTS * 0.7) + (currentScore * 0.3));
 
-    // Determine status
     let status: 'Improvement' | 'Stable' | 'Decline';
     if (newRTS > lastRTS + 2) {
       status = 'Improvement';
@@ -74,29 +79,56 @@ export async function createNewSession(patientId: string, previousSessions: Sess
       status = 'Stable';
     }
 
-    const newSession: Omit<Session, 'blockchain'> & { blockchain: any } = {
-        id: `s${Math.random().toString(36).substr(2, 9)}`,
-        date: new Date().toISOString(),
-        exercises: newExercises,
+    const newSession = await prisma.session.create({
+      data: {
+        patientId,
         recoveryTrendScore: newRTS,
-        status: status,
-        isFlagged: false,
-        blockchain: null
-    };
+        status,
+        rts: {
+          create: newExercises,
+        },
+      },
+      include: {
+        rts: true,
+      },
+    });
 
     const blockchainResponse = await recordSessionOnChain(patientId, newSession);
     
     if (blockchainResponse.success && blockchainResponse.data) {
-        const finalSession: Session = {
-            ...newSession,
-            blockchain: {
-                transactionHash: blockchainResponse.data.transactionHash,
-                timestamp: blockchainResponse.data.timestamp
+        const finalSession = await prisma.session.update({
+            where: { id: newSession.id },
+            data: {
+                blockchain: {
+                    create: {
+                        transactionHash: blockchainResponse.data.transactionHash,
+                        timestamp: new Date(blockchainResponse.data.timestamp)
+                    }
+                }
+            },
+            include: {
+                rts: true,
+                blockchain: true,
             }
-        };
-        const updatedPatients = addSessionToPatientData(patientId, finalSession);
+        });
+
+        const patients = await prisma.patient.findMany({
+          include: {
+            user: true,
+            sessions: {
+              include: {
+                rts: true,
+                blockchain: true,
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+            },
+          },
+        });
+
         revalidatePath('/');
-        return { success: true, data: finalSession, patients: updatedPatients };
+        return { success: true, data: finalSession, patients };
     } else {
         throw new Error(blockchainResponse.error || 'Unknown blockchain error');
     }
