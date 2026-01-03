@@ -79,7 +79,5 @@ enum Role {
   PATIENT
   NEUROLOGIST
 }
-@app.post("/session")
-def create_session(session: dict):
-    return {"status": "session recorded"}
+
 
