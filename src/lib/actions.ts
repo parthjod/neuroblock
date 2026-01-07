@@ -79,7 +79,7 @@ export async function createNewSession(patientId: string) {
       status = 'Stable';
     }
 
-    const newSession = await prisma.session.create({
+const newSession = await prisma.session.create({
       data: {
         patientId,
         recoveryTrendScore: newRTS,
@@ -98,7 +98,7 @@ export async function createNewSession(patientId: string) {
     if (blockchainResponse.success && blockchainResponse.data) {
         const finalSession = await prisma.session.update({
             where: { id: newSession.id },
-            data: {
+data: {
                 blockchain: {
                     create: {
                         transactionHash: blockchainResponse.data.transactionHash,

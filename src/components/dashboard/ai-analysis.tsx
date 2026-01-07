@@ -13,10 +13,10 @@ import { Button } from "@/components/ui/button";
 import { BrainCircuit, Bot } from "lucide-react";
 import { getAIAnalysis } from "@/lib/actions";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Session } from "@/lib/types";
+import type { SessionWithRelations } from "@/lib/types";
 
 type AIAnalysisProps = {
-  session: Session;
+  session: SessionWithRelations;
 };
 
 type AnalysisData = {
@@ -36,17 +36,20 @@ export default function AIAnalysis({ session }: AIAnalysisProps) {
     setIsLoading(true);
     setError(null);
     try {
-      // For simplicity, we'll use the average metrics of the first exercise
-      const exercise = session.exercises[0];
-      if (!exercise) {
-        throw new Error("No exercise data available for this session.");
+      if (!session.rts || session.rts.length === 0) {
+        throw new Error("No RTS data available for this session.");
       }
+      
+      const movementDescription = session.rts.map(r => r.joint).join(', ');
+      const avgScore = session.rts.reduce((acc, r) => acc + r.score, 0) / session.rts.length;
+
       const result = await getAIAnalysis(
-        exercise.name,
-        exercise.rangeOfMotion,
-        exercise.stability,
-        exercise.accuracy
+        movementDescription,
+        avgScore, // Using avgScore for rangeOfMotion
+        100 - avgScore, // A plausible value for stabilityVariance
+        avgScore, // Using avgScore for accuracy
       );
+
       if (result.success && result.data) {
         setAnalysis(result.data);
       } else {
@@ -57,7 +60,7 @@ export default function AIAnalysis({ session }: AIAnalysisProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [analysis, session.exercises]);
+  }, [analysis, session.rts]);
 
   const onOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -82,7 +85,7 @@ export default function AIAnalysis({ session }: AIAnalysisProps) {
           </DialogTitle>
           <DialogDescription>
             Analysis of hand movement quality for the session on{" "}
-            {new Date(session.date).toLocaleDateString()}.
+            {new Date(session.createdAt).toLocaleDateString()}.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-6">

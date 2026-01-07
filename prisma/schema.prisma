@@ -56,8 +56,7 @@ model Session {
   recoveryTrendScore  Float
   status              String
   isFlagged           Boolean     @default(false)
-  blockchain          Blockchain? @relation(fields: [blockchainId], references: [id])
-  blockchainId        String?
+  blockchain          Blockchain[]
 }
 
 model RTS {
@@ -72,7 +71,8 @@ model Blockchain {
   id              String   @id @default(cuid())
   transactionHash String
   timestamp       DateTime
-  session         Session?
+  sessionId       String   @unique
+  session         Session   @relation(fields: [sessionId], references: [id])
 }
 
 enum Role {

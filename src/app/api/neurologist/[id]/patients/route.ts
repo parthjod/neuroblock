@@ -7,10 +7,11 @@ interface NeurologistPatientsParams {
 
 export async function GET(
   req: Request,
-  { params }: { params: NeurologistPatientsParams }
+  { params }: { params: Promise<NeurologistPatientsParams> }
 ) {
+  const { id } = await params;
   const neurologist = await prisma.neurologist.findUnique({
-    where: { userId: params.id },
+    where: { userId: id },
     include: {
       patients: {
         where: {
@@ -22,6 +23,15 @@ export async function GET(
           patient: {
             include: {
               user: true,
+              sessions: {
+                include: {
+                  rts: true,
+                  blockchain: true,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+              },
             },
           },
         },
@@ -34,12 +44,12 @@ export async function GET(
   }
 
   const patients = neurologist.patients.map((p: typeof neurologist.patients[number]) => ({
-    id: p.patient.user.id,
+    id: p.patient.id,
     name: p.patient.user.email, // Or a name field if you add it
     age: 0, // Replace with actual data
     condition: '', // Replace with actual data
     avatarUrl: '', // Replace with actual data
-    sessions: [], // Replace with actual data
+    sessions: p.patient.sessions,
     hasPermission: true,
   }));
 

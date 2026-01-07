@@ -17,6 +17,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import FlagButton from "./flag-button";
 import AIAnalysis from "./ai-analysis";
@@ -58,8 +59,8 @@ const StatusIndicator = ({
 };
 
 const SessionRow = ({ session, patientId }: { session: import('@/lib/types').SessionWithRelations, patientId: string }) => {
-  const formattedDate = useFormattedDate(session.createdAt, "MMMM d, yyyy");
-  const formattedTime = useFormattedDate(session.createdAt, "h:mm a");
+  const formattedDate = useFormattedDate(new Date(session.createdAt).toISOString(), "MMMM d, yyyy");
+  const formattedTime = useFormattedDate(new Date(session.createdAt).toISOString(), "h:mm a");
 
   return (
     <AccordionItem value={session.id} key={session.id}>
@@ -78,7 +79,7 @@ const SessionRow = ({ session, patientId }: { session: import('@/lib/types').Ses
               {formattedTime}
             </span>
           </div>
-          <div className="flex items-center gap-4">
+<div className="flex items-center gap-4">
             <StatusIndicator status={session.status as any} />
             <div className="text-right">
                 <div className="font-semibold">{session.recoveryTrendScore}</div>
@@ -87,7 +88,7 @@ const SessionRow = ({ session, patientId }: { session: import('@/lib/types').Ses
           </div>
         </div>
       </AccordionTrigger>
-      <AccordionContent>
+<AccordionContent>
         <div className="space-y-4 pt-2">
             <Table>
                 <TableHeader>
@@ -107,7 +108,7 @@ const SessionRow = ({ session, patientId }: { session: import('@/lib/types').Ses
             </Table>
             <div className="flex justify-between items-center px-4">
                 <div className="text-xs text-muted-foreground">
-                    Tx Hash: <span className="font-mono">{session.blockchain?.transactionHash.substring(0, 12)}...</span>
+                    Tx Hash: <span className="font-mono">{session.blockchain?.[0]?.transactionHash?.substring(0, 12)}...</span>
                 </div>
                 <div className="flex gap-2">
                     <AIAnalysis session={session as any} />

@@ -14,16 +14,9 @@ export async function POST(req: Request) {
   try {
     const session = await prisma.session.create({
       data: {
-        patient: {
-          connect: { id: patientId },
-        },
-
-        // REQUIRED FIELDS (from Prisma schema)
-        recoveryTrendScore: 0,
-        status: 'PENDING',
-        isFlagged: false,
-
-        // Initial RTS values
+        patientId,
+        recoveryTrendScore: 50,
+        status: 'Stable',
         rts: {
           create: [
             { joint: 'Ankle', score: 0 },
@@ -47,11 +40,5 @@ export async function POST(req: Request) {
       { error: 'Failed to create session' },
       { status: 500 }
     );
-  }
-}
-
-  } catch (error) {
-    console.error('Error creating session:', error);
-    return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
   }
 }

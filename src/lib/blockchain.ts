@@ -1,7 +1,7 @@
 // This is a mock blockchain service to simulate interactions.
 // In a real application, this would interact with a smart contract (e.g., via ethers.js or web3.js).
 
-import type { Session } from './types';
+import type { Session } from '@prisma/client';
 
 const MOCK_LATENCY_MS = 1500;
 

@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { createNewSession } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { SessionWithRelations, Patient } from "@/lib/types";
-import { ProgressRing } from "./progress-ring";
-import { Loader2, Camera } from "lucide-react";
+import ProgressRing from "./progress-ring";
+import { Loader2, Camera, Video, VideoOff, Square } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 type SessionState = "idle" | "tracking" | "processing" | "complete" | "error";
@@ -33,47 +33,140 @@ export default function SessionModal({
   onSessionCreated,
 }: SessionModalProps) {
   const [sessionState, setSessionState] = useState<SessionState>("idle");
-  const [newSessionData, setNewSessionData] = useState<SessionWithRelations | null>(null);
+  const [newSessionData, setNewSessionData] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingData, setRecordingData] = useState<any>(null);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
 
   useEffect(() => {
-    // Check for camera permission
+    // Check for camera permission and setup stream
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ video: true })
-            .then(() => setHasCameraPermission(true))
+            .then((mediaStream) => {
+                setHasCameraPermission(true);
+                setStream(mediaStream);
+                if (videoRef.current) {
+                    videoRef.current.srcObject = mediaStream;
+                }
+            })
             .catch(() => setHasCameraPermission(false));
     }
   }, []);
 
+  useEffect(() => {
+    // Cleanup stream on unmount
+    return () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+    };
+  }, [stream]);
+
+  useEffect(() => {
+    // Update recording duration
+    let interval: NodeJS.Timeout;
+    if (isRecording && recordingStartTime > 0) {
+        interval = setInterval(() => {
+            setRecordingDuration(Math.floor((Date.now() - recordingStartTime) / 1000));
+        }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording, recordingStartTime]);
+
   const handleClose = () => {
     if (sessionState !== 'processing') {
+        stopRecording();
         setSessionState("idle");
         onClose();
     }
   };
 
+  const startRecording = useCallback(() => {
+    if (!stream) return;
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm'
+    });
+
+    const chunks: Blob[] = [];
+    
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const duration = Date.now() - recordingStartTime;
+      
+      // Create thumbnail
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(blob);
+      video.currentTime = 1; // Capture frame at 1 second
+      
+      video.onloadeddata = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0);
+          const thumbnail = canvas.toDataURL('image/jpeg');
+          
+          setRecordingData({
+            blob,
+            duration,
+            thumbnail
+          });
+        }
+      };
+    };
+
+    recorder.start();
+    setMediaRecorder(recorder);
+    setIsRecording(true);
+    setRecordingStartTime(Date.now());
+    setRecordingDuration(0);
+  }, [stream, recordingStartTime]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  }, [mediaRecorder]);
+
   const handleStartSession = () => {
     if (hasCameraPermission) {
         setSessionState("tracking");
-        // Simulate some processing
+        startRecording();
+        
+        // Simulate some processing after recording
         setTimeout(() => {
-            startTransition(() => {
-                createNewSession({ patientId: patient.id, reps: 10, duration: 60, rom: 90})
-                .then((session) => {
-                    if(session) {
-                        setNewSessionData(session);
-                        onSessionCreated(session);
+            stopRecording();
+            setSessionState("processing");
+            
+            setTimeout(() => {
+                startTransition(async () => {
+                    const result = await createNewSession(patient.id);
+                    if (result.success && result.data) {
+                        setNewSessionData(result.data);
+                        onSessionCreated(result.data);
                         setSessionState("complete");
                     } else {
                         setSessionState("error");
                     }
-                })
-                .catch(()=>setSessionState("error"));
-            });
-        }, 3000);
+                });
+            }, 2000);
+        }, 10000); // Record for 10 seconds
     }
   };
 
@@ -82,21 +175,44 @@ export default function SessionModal({
       case "complete":
         return (
           <div className="flex flex-col items-center justify-center space-y-4 h-80">
-            <ProgressRing status={newSessionData?.status ?? 'Stable'} />
+            <ProgressRing status={newSessionData?.status as 'Improvement' | 'Stable' | 'Decline' ?? 'Stable'} />
             <h2 className="text-2xl font-bold">Session Complete!</h2>
             <p className="text-muted-foreground">Recovery Trend Score: {newSessionData?.recoveryTrendScore}</p>
+            {recordingData && (
+              <div className="flex items-center space-x-2 text-xs text-green-600">
+                <Video className="w-4 h-4" />
+                <span>Video recorded ({Math.floor(recordingData.duration / 1000)}s)</span>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground/80 max-w-xs text-center">
-                This session has been immutably recorded on the blockchain.
+                RTS score has been saved to the database and recorded on the blockchain.
             </p>
           </div>
         );
       case "tracking":
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 h-80">
+                <div className="relative w-64 h-48 bg-muted rounded-lg overflow-hidden">
+                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                    {isRecording && (
+                        <div className="absolute top-2 right-2 flex items-center space-x-2 bg-red-600 text-white px-2 py-1 rounded">
+                            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                            <span className="text-xs">REC {recordingDuration}s</span>
+                        </div>
+                    )}
+                </div>
+                <h2 className="text-xl font-semibold">Recording in progress...</h2>
+                <p className="text-muted-foreground text-center text-sm">
+                    Please continue the rehabilitation exercises.
+                </p>
+            </div>
+        );
       case "processing":
         return (
             <div className="flex flex-col items-center justify-center space-y-4 h-80">
                 <Loader2 className="w-16 h-16 text-primary animate-spin"/>
-                <h2 className="text-2xl font-bold">Session in progress...</h2>
-                <p className="text-muted-foreground">Please continue the exercises.</p>
+                <h2 className="text-2xl font-bold">Processing session...</h2>
+                <p className="text-muted-foreground">Analyzing movement and updating dashboard.</p>
             </div>
         );
       case "error":
@@ -132,6 +248,9 @@ export default function SessionModal({
                         <h2 className="text-xl font-semibold">Ready to start?</h2>
                         <p className="text-muted-foreground text-center text-sm">
                             Ensure the patient's hand is visible to the camera.
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 text-center">
+                            The session will be recorded for analysis and progress tracking.
                         </p>
                     </>
                 )}

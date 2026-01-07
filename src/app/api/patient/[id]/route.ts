@@ -3,10 +3,11 @@ import { prisma } from '@/lib/db';
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const patient = await prisma.patient.findUnique({
-    where: { userId: params.id },
+    where: { userId: id },
     include: {
       neurologists: true,
     },
@@ -21,12 +22,13 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const { details, visibility, neurologistIds } = await req.json();
 
   const patient = await prisma.patient.update({
-    where: { userId: params.id },
+    where: { userId: id },
     data: {
       details,
       visibility,

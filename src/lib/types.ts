@@ -6,7 +6,31 @@ export type PatientWithNeurologists = PrismaPatient & {
 
 export type SessionWithRelations = PrismaSession & {
   rts: RTS[];
-  blockchain: Blockchain | null;
+  blockchain: Blockchain[];
+  exercises: Array<{
+    name: string;
+    rangeOfMotion: number;
+    stability: number;
+    accuracy: number;
+  }>;
+};
+
+export type Session = {
+  id: string;
+  date: string;
+  exercises: Array<{
+    name: string;
+    rangeOfMotion: number;
+    stability: number;
+    accuracy: number;
+  }>;
+  recoveryTrendScore: number;
+  status: 'Improvement' | 'Stable' | 'Decline';
+  isFlagged: boolean;
+  blockchain?: {
+    transactionHash: string;
+    timestamp: number;
+  };
 };
 
 export type PatientWithRelations = PrismaPatient & {

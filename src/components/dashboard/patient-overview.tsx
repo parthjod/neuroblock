@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import type { Patient } from "@/lib/types";
+import type { Patient, SessionWithRelations } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -36,13 +36,20 @@ export default function PatientOverview() {
     }
   }, [session]);
 
-  const selectedPatient = useMemo(
+const selectedPatient = useMemo(
     () => patients.find((p) => p.id === selectedPatientId),
     [patients, selectedPatientId]
   );
   
-  const handleSessionCreated = (newPatientsState: Patient[]) => {
-    setPatients(newPatientsState);
+const handleSessionCreated = async (newSession: SessionWithRelations) => {
+    // Refresh patients list to get updated data
+    if (session?.user?.id) {
+      const data = await fetch(`/api/neurologist/${session.user.id}/patients`);
+      const patientsData = await data.json();
+      if (patientsData) {
+        setPatients(patientsData);
+      }
+    }
   };
 
   return (
@@ -73,7 +80,7 @@ export default function PatientOverview() {
         </div>
       </div>
 
-      {selectedPatient ? (
+{selectedPatient ? (
         selectedPatient.hasPermission ? (
           <div className="grid gap-6">
             <Card>
