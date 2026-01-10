@@ -41,6 +41,7 @@ def record(data: MotionData):
 def history():
     cur.execute("SELECT * FROM ledger")
     rows = cur.fetchall()
+    return [{"id": r[0], "hash": r[1], "timestamp": r[2]}]
 
     return [
         {"id": r[0], "hash": r[1], "timestamp": r[2]}
